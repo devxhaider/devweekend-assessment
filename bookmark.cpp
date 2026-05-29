@@ -1,11 +1,15 @@
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <iomanip>
 #include <climits>
 #include <cctype>
+#include <cstdlib>
 
 using namespace std;
+
+const string FILE_NAME = "bookmarks.dat";
 
 struct Bookmark {
     int id;
@@ -17,7 +21,7 @@ struct Bookmark {
 vector<Bookmark> bookmarks;
 int nextId = 1;
 
-// -- Helpers ------------------------------------------------------------------
+// -- Helpers -------------------------------------------------------------------
 
 void clearInput() {
     cin.ignore(INT_MAX, '\n');
@@ -38,7 +42,6 @@ void pause() {
     cout << "\nPress Enter to continue...";
     clearInput();
     cin.get();
-
 }
 
 string toLower(const string& s) {
@@ -54,7 +57,68 @@ string truncate(const string& s, int maxLen) {
     return s;
 }
 
-// -- Core Operations ----------------------------------------------------------
+// -- File Storage --------------------------------------------------------------
+//
+// Format (bookmarks.dat):
+//   id|title|url|description
+//   id|title|url|description
+//   ...
+//
+// Pipe '|' is the field separator. Description may be empty (trailing pipe).
+
+void saveToFile() {
+    ofstream file(FILE_NAME.c_str());
+    if (!file) {
+        cout << "Warning: could not save to " << FILE_NAME << "\n";
+        return;
+    }
+
+    for (int i = 0; i < (int)bookmarks.size(); i++) {
+        const Bookmark& b = bookmarks[i];
+        file << b.id << "|" << b.title << "|" << b.url << "|" << b.description << "\n";
+    }
+
+    file.close();
+}
+
+void loadFromFile() {
+    ifstream file(FILE_NAME.c_str());
+    if (!file) return;   // no file yet, that's fine
+
+    string line;
+    while (getline(file, line)) {
+        if (line.empty()) continue;
+
+        Bookmark b;
+
+        // parse id
+        size_t pos1 = line.find('|');
+        if (pos1 == string::npos) continue;
+        b.id = atoi(line.substr(0, pos1).c_str());
+
+        // parse title
+        size_t pos2 = line.find('|', pos1 + 1);
+        if (pos2 == string::npos) continue;
+        b.title = line.substr(pos1 + 1, pos2 - pos1 - 1);
+
+        // parse url
+        size_t pos3 = line.find('|', pos2 + 1);
+        if (pos3 == string::npos) continue;
+        b.url = line.substr(pos2 + 1, pos3 - pos2 - 1);
+
+        // parse description (may be empty)
+        b.description = line.substr(pos3 + 1);
+
+        bookmarks.push_back(b);
+
+        if (b.id >= nextId)
+            nextId = b.id + 1;
+    }
+
+    file.close();
+}
+
+// -- Core Operations -----------------------------------------------------------
 
 void addBookmark() {
     printHeader("ADD BOOKMARK");
@@ -85,6 +149,7 @@ void addBookmark() {
     getline(cin, b.description);
 
     bookmarks.push_back(b);
+    saveToFile();
     cout << "\n+ Bookmark #" << b.id << " added successfully.\n";
     pause();
 }
@@ -182,6 +247,7 @@ void updateBookmark() {
             getline(cin, input);
             if (!input.empty()) b.description = input;
 
+            saveToFile();
             cout << "\n+ Bookmark #" << id << " updated successfully.\n";
             pause();
             return;
@@ -212,6 +278,7 @@ void deleteBookmark() {
             cin >> confirm;
             if (confirm == 'y' || confirm == 'Y') {
                 bookmarks.erase(it);
+                saveToFile();
                 cout << "\n+ Bookmark #" << id << " deleted.\n";
             } else {
                 cout << "Cancelled.\n";
@@ -270,7 +337,7 @@ void searchBookmarks() {
     pause();
 }
 
-// -- Menu ---------------------------------------------------------------------
+// -- Menu ----------------------------------------------------------------------
 
 void showMenu() {
     cout << "\n";
@@ -290,10 +357,12 @@ void showMenu() {
 }
 
 int main() {
-    int choice;
+    loadFromFile();
 
     cout << "\nWelcome to Bookmark Manager!\n";
+    cout << "Data file: " << FILE_NAME << " (" << bookmarks.size() << " bookmark(s) loaded)\n";
 
+    int choice;
     while (true) {
         showMenu();
         cin >> choice;
@@ -313,4 +382,3 @@ int main() {
         }
     }
 }
-
